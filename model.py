@@ -9,6 +9,9 @@ MODEL_NAME = "smollm2:135m"
 
 def get_embedding(text):
 
+    if text is None:
+        text=""
+
     payload = {
         "model": MODEL_NAME,
         "prompt": text

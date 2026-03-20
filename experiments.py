@@ -5,8 +5,11 @@ from rag import get_embedding
 from config import PGDATABASE, PGUSER, PGPASSWORD, PGHOST
 
 queries = [
-   "Top 5 thriller movies",
-   "Top 5 horror movies" # Add more queries as needed
+    "Top 5 thriller movies",
+    "Top 5 horror movies",
+    "Sci-fi adventure in space with aliens",
+    "Documentary about nature and wild animals",
+    "Top 5 action movies"
 ]
 
 embeddings = [get_embedding(q) for q in queries] # Caluclate embeddings for queries
