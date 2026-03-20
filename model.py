@@ -3,54 +3,65 @@ import requests
 
 from config import PGDATABASE, PGUSER, PGPASSWORD, PGHOST
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
 OLLAMA_URL = "http://localhost:11434/api/embeddings"
+MODEL_NAME = "smollm2:135m"
 
-# TODO (Task 1.i): Choose the Ollama model to use for generating embeddings.
-#                  Make sure this matches the model used in ragGen.py.
-MODEL_NAME = ""  # e.g. "smollm2:135m"
-
-
-# ---------------------------------------------------------------------------
-# Task 1 - Embedding Generation
-# --------------------------------------------------------------------------
 
 def get_embedding(text):
-    """
-    Sends the given text to the Ollama Embeddings API and returns the
-    resulting embedding vector as a list of floats.
 
-    TODO:
-    - Build the request payload with the model name and input text.
-    - Send a POST request to OLLAMA_URL.
-    - Parse the JSON response and extract the embedding.
-    - Return the embedding vector.
-    """
-    # TODO: Implement this function
-    pass
+    payload = {
+        "model": MODEL_NAME,
+        "prompt": text
+    }
+
+    response = requests.post(OLLAMA_URL, json=payload)
+    response.raise_for_status()
+
+    data = response.json()
+    return data["embedding"]
 
 
 def update_embeddings():
-    """
-    Connects to the imdb_staging PostgreSQL table, reads every row,
-    generates an embedding for the 'overview' column using get_embedding(),
-    and saves the result back into the 'embedding' column of that row.
 
-    TODO:
-    - Connect to the PostgreSQL database using psycopg2.
-    - Fetch all rows (you need both 'ctid' and 'overview').
-    - For each row:
-        Calculate the embedding for the 'overview' column
-    """
-    # TODO: Implement this function
-    pass
+    conn = psycopg2.connect(
+        dbname=PGDATABASE,
+        user=PGUSER,
+        password=PGPASSWORD,
+        host=PGHOST
+    )
+
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    cur.execute("SELECT ctid, overview FROM imdb_staging;")
+    rows = cur.fetchall()
+
+    for ctid, overview in rows:
+
+        emb = get_embedding(overview)
+
+        vec = "[" + ",".join(map(str, emb)) + "]"
+
+        cur.execute(
+            "UPDATE imdb_staging SET embedding = %s::vector WHERE ctid = %s;",
+            (vec, ctid)
+        )
+
+        print("Updated:", ctid)
+
+    cur.close()
+    conn.close()
 
 
 def setup_database():
-    conn = psycopg2.connect(dbname=PGDATABASE, user=PGUSER, password=PGPASSWORD, host=PGHOST)
+
+    conn = psycopg2.connect(
+        dbname=PGDATABASE,
+        user=PGUSER,
+        password=PGPASSWORD,
+        host=PGHOST
+    )
+
     conn.autocommit = True
     cur = conn.cursor()
 
@@ -78,14 +89,21 @@ def setup_database():
         );
     """)
 
-    csv_file_path = "imdb_top_1000.csv"
-    
-    with open(csv_file_path, 'r') as f:
-        cur.copy_expert("COPY imdb_staging (Poster_Link, Series_Title, Released_Year, Certificate, Runtime, Genre, IMDB_Rating, Overview, Meta_score, Director, Star1, Star2, Star3, Star4, No_of_Votes, Gross) FROM STDIN WITH (FORMAT CSV, HEADER)", f)
-        
+    with open("imdb_top_1000.csv") as f:
+        cur.copy_expert("""
+            COPY imdb_staging
+            (Poster_Link, Series_Title, Released_Year, Certificate, Runtime,
+             Genre, IMDB_Rating, Overview, Meta_score, Director,
+             Star1, Star2, Star3, Star4, No_of_Votes, Gross)
+            FROM STDIN WITH CSV HEADER
+        """, f)
+
     cur.close()
     conn.close()
 
+
 if __name__ == "__main__":
-    # setup_database() # Uncomment when you want to create/recreate the table and load data
+    # first time run this
+    # setup_database()
+
     update_embeddings()
